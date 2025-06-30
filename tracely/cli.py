@@ -101,7 +101,7 @@ def list_runs(project: Optional[str] = None, as_json: bool = False):
 @cli.command()
 @click.option("--web", is_flag=True, help="Open in browser after launch")
 @click.option("--project", "project", required=False, type=str, help="Project name")
-def ui(web, project):
+def ui(web, project: str):
     """Launch the Streamlit UI."""
     try:
         import streamlit
@@ -109,10 +109,8 @@ def ui(web, project):
         import time
         from tracely import webapp
 
-        # set the project as an env var
-        env = os.environ.copy()
         if project:
-            env["TRACELY_PROJECT"] = project
+            os.environ["TRACELY_PROJECT"] = project
             click.echo(f"Starting UI for project: {project}")
         else:
             click.echo("No project selected. Please select a project in the cli.")
@@ -226,12 +224,13 @@ def sync(
 
     # start streamlit on remote machine
     click.echo("Starting the interface on the remote machine")
+    remote_command = f"nohup tracely ui --project {project} > /dev/null 2>&1 & echo 'Interface started on remote machine'"
     start_remote_ui_command = [
         "ssh",
         "-i",
         expanded_key_path,
         f"{user}@{from_ip}",
-        "nohup tracely ui --project {project} > /dev/null 2>&1 & echo 'Interface started on remote machine'",
+        remote_command,
     ]
     try:
         subprocess.run(start_remote_ui_command, check=True)
@@ -285,10 +284,43 @@ def sync(
             tunnel_process.wait()
         except KeyboardInterrupt:
             click.echo("Closing the sync process")
+            cleanup_command = [
+                "ssh",
+                "-i",
+                expanded_key_path,
+                f"{user}@{from_ip}",
+                "pkill -f 'streamlit run' || true",
+            ]
+            try:
+                subprocess.run(cleanup_command)
+            except subprocess.CalledProcessError as e:
+                click.echo(
+                    f"Error killing the streamlit process on the remote machine: {e}",
+                    err=True,
+                )
+            except Exception as e:
+                click.echo(f"An unexpected error occurred: {e}", err=True)
+
             tunnel_process.terminate()
             try:
                 tunnel_process.wait(timeout=5)
             except subprocess.TimeoutExpired:
+                cleanup_command = [
+                    "ssh",
+                    "-i",
+                    expanded_key_path,
+                    f"{user}@{from_ip}",
+                    "pkill -f 'streamlit run' || true",
+                ]
+                try:
+                    subprocess.run(cleanup_command)
+                except subprocess.CalledProcessError as e:
+                    click.echo(
+                        f"Error killing the streamlit process on the remote machine: {e}",
+                        err=True,
+                    )
+                except Exception as e:
+                    click.echo(f"An unexpected error occurred: {e}", err=True)
                 tunnel_process.kill()
             click.echo("Sync process closed")
     except Exception as e:
