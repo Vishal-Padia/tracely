@@ -10,6 +10,8 @@ setup(
         "pandas",
         "pyarrow",
         "streamlit",
+        "plotly",
+        "matplotlib"
     ],
     entry_points={
         "console_scripts": [
