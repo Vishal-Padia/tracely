@@ -11,21 +11,33 @@ def main():
     st.set_page_config(page_title="Tracely", layout="wide")
     st.title("Tracely - lightweight ML monitoring tool")
 
-    project = sidebar_project_selector()
+    # get the project from the env var
+    project = os.environ.get("TRACELY_PROJECT")
+
     if project:
+        # verify whether the project exists
+        project_dir = Path(TRACELY_DIR) / "runs" / project
+        if not project_dir.exists():
+            st.error(f"Project {project} does not exist.")
+            st.stop()
+
+        # get the run id
         run_id = sidebar_run_selector(project)
         if run_id:
             run_dir = Path(TRACELY_DIR) / "runs" / project / run_id
             show_run_details(run_dir)
+    else:
+        st.error("No project selected when running the tracely cli. Please select a project in the cli.")
+        st.stop()
 
-def sidebar_project_selector() -> Optional[str]:
-    projects_dir = Path(TRACELY_DIR) / "runs"
-    if not projects_dir.exists():
-        st.sidebar.warning("No projects found.")
-        return None
+# def sidebar_project_selector() -> Optional[str]:
+#     projects_dir = Path(TRACELY_DIR) / "runs"
+#     if not projects_dir.exists():
+#         st.sidebar.warning("No projects found.")
+#         return None
 
-    projects = sorted([p.name for p in projects_dir.iterdir() if p.is_dir()])
-    return st.sidebar.selectbox("Select Project", projects) if projects else None
+#     projects = sorted([p.name for p in projects_dir.iterdir() if p.is_dir()]) 
+#     return st.sidebar.selectbox("Select Project", projects) if projects else None
 
 
 def sidebar_run_selector(project: str) -> Optional[str]:
