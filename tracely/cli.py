@@ -2,6 +2,7 @@ import os
 import json
 import click
 import webbrowser
+import subprocess
 from pathlib import Path
 from typing import Optional
 
@@ -99,13 +100,24 @@ def list_runs(project: Optional[str] = None, as_json: bool = False):
 
 @cli.command()
 @click.option("--web", is_flag=True, help="Open in browser after launch")
-def ui(web):
+@click.option("--project", "project", required=False, type=str, help="Project name")
+def ui(web, project):
     """Launch the Streamlit UI."""
     try:
         import streamlit
         import subprocess
         import time
         from tracely import webapp
+
+        # set the project as an env var
+        env = os.environ.copy()
+        if project:
+            env["TRACELY_PROJECT"] = project
+            click.echo(f"Starting UI for project: {project}")
+        else:
+            click.echo("No project selected. Please select a project in the cli.")
+            click.echo("You can view all your projects using `tracely list`")
+            return
 
         # launch the streamlit app using subprocess
         process = subprocess.Popen(
@@ -141,6 +153,149 @@ def path(run_id: str):
         click.echo(str(run_dir))
     except ValueError as e:
         click.echo(str(e), err=True)
+
+
+@cli.command(name="sync")
+@click.option(
+    "--from-ip",
+    "from_ip",
+    required=True,
+    type=str,
+    help="IP address where you're running the script",
+)
+@click.option(
+    "--key",
+    "key_path",
+    required=True,
+    type=str,
+    help="Location to your private ssh key",
+)
+@click.option(
+    "--user", "user", required=True, type=str, help="Username for the remote server"
+)
+@click.option(
+    "--port",
+    "port",
+    required=False,
+    type=int,
+    help="Port to sync the run from",
+    default=8501,
+)
+@click.option(
+    "--remote-port",
+    "remote_port",
+    required=False,
+    type=int,
+    help="Port to sync the run from",
+    default=8501,
+)
+@click.option("--project", "project", required=False, type=str, help="Project name")
+def sync(
+    from_ip: str,
+    key_path: str,
+    user: str,
+    port: int = 8501,
+    remote_port: int = 8501,
+    project: str = None,
+):
+    """
+    Sync your runs from a remote server to your local machine
+
+    Args:
+        project: The name of the project you're currently running the script.
+        from_ip: The IP address you're currently running the script.
+        key_path: Location to your private ssh key
+        user: Username for the remote server
+        port: Port to sync the run from
+        remote_port: Port to sync the run to
+    """
+    if not from_ip:
+        click.echo(
+            "Error: Please provide the IP address of your cloud machine.", err=True
+        )
+        return
+    expanded_key_path = os.path.expanduser(key_path)
+    if not key_path or not os.path.exists(expanded_key_path):
+        click.echo(
+            "Error: Please provide a valid path to your private SSH key.", err=True
+        )
+        return
+    if not project:
+        click.echo("Error: Please provide a project name.", err=True)
+        return
+
+    # start streamlit on remote machine
+    click.echo("Starting the interface on the remote machine")
+    start_remote_ui_command = [
+        "ssh",
+        "-i",
+        expanded_key_path,
+        f"{user}@{from_ip}",
+        "nohup tracely ui --project {project} > /dev/null 2>&1 & echo 'Interface started on remote machine'",
+    ]
+    try:
+        subprocess.run(start_remote_ui_command, check=True)
+    except subprocess.CalledProcessError as e:
+        click.echo(f"Error starting the interface on the remote machine: {e}", err=True)
+        return
+    except Exception as e:
+        click.echo(f"An unexpected error occurred: {e}", err=True)
+        return
+
+    # creating ssh tunnel
+    ssh_command = [
+        "ssh",
+        "-i",
+        expanded_key_path,
+        f"{user}@{from_ip}",
+        "-N",
+        "-L",
+        f"{port}:localhost:{remote_port}",
+    ]
+    try:
+        # start tunnel process in the background
+        tunnel_process = subprocess.Popen(
+            ssh_command,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            universal_newlines=True,
+        )
+
+        # giving time for the tunnel to be created
+        import time
+
+        time.sleep(3)
+
+        # check if the tunnel process is still running
+        if tunnel_process.poll() is not None:
+            _, stderr = tunnel_process.communicate()
+            click.echo(
+                f"Error: SSH tunnel failed. Please check your SSH key and IP address. {stderr}",
+                err=True,
+            )
+            return
+
+        # open the browser locally
+        browser_url = f"http://localhost:{port}"
+        click.echo(f"Opening the browser at {browser_url}")
+        webbrowser.open(browser_url)
+
+        # keep the tunnel process running until the user interupts
+        try:
+            tunnel_process.wait()
+        except KeyboardInterrupt:
+            click.echo("Closing the sync process")
+            tunnel_process.terminate()
+            try:
+                tunnel_process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                tunnel_process.kill()
+            click.echo("Sync process closed")
+    except Exception as e:
+        click.echo(
+            f"Error: An Error occurred while syncing the run. Please check your SSH key and IP address {e}",
+            err=True,
+        )
 
 
 @cli.command()
