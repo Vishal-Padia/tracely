@@ -91,14 +91,13 @@ Most tools today either:
   Remove specific runs or entire projects cleanly from your `.tracely` store.
 * **`tracely ui --web`**
   Launch Streamlit dashboard to explore configs, metrics, artifacts, and debug info.
+* **`tracely sync` (Remote Viewer)**
+  Secure SSH-based tunneling from remote machines to your local browser for real-time experiment viewing.
 
 ### Core UX (Coming Soon)
 
 * **`tracely track` (SDK Decorator)**
   Decorator to auto-track run metadata, exceptions, and timestamps around your training functions.
-
-* **`tracely sync` (Remote Viewer)**
-  Secure SSH-based tunneling from remote machines to your local browser for real-time experiment viewing.
 
 * **Run Diffs**
   Visualize what changed between runs — configs, metrics, artifacts — in a structured diff panel.
