@@ -7,6 +7,7 @@ from typing import Optional
 
 TRACELY_DIR = os.path.expanduser("~/.tracely")
 
+
 def main():
     st.set_page_config(page_title="Tracely", layout="wide")
     st.title("Tracely - lightweight ML monitoring tool")
@@ -27,17 +28,10 @@ def main():
             run_dir = Path(TRACELY_DIR) / "runs" / project / run_id
             show_run_details(run_dir)
     else:
-        st.error("No project selected when running the tracely cli. Please select a project in the cli.")
+        st.error(
+            "No project selected when running the tracely cli. Please select a project in the cli."
+        )
         st.stop()
-
-# def sidebar_project_selector() -> Optional[str]:
-#     projects_dir = Path(TRACELY_DIR) / "runs"
-#     if not projects_dir.exists():
-#         st.sidebar.warning("No projects found.")
-#         return None
-
-#     projects = sorted([p.name for p in projects_dir.iterdir() if p.is_dir()]) 
-#     return st.sidebar.selectbox("Select Project", projects) if projects else None
 
 
 def sidebar_run_selector(project: str) -> Optional[str]:
@@ -64,10 +58,12 @@ def show_run_details(run_dir: Path):
         metrics_df = load_metrics(run_dir)
         if not metrics_df.empty:
             metric_keys = metrics_df["key"].unique().tolist()
-            selected_keys = st.multiselect("Select metrics", metric_keys, default=metric_keys[:1])
+            selected_keys = st.multiselect(
+                "Select metrics", metric_keys, default=metric_keys[:1]
+            )
             for key in selected_keys:
                 plot_df = metrics_df[metrics_df["key"] == key]
-                st.line_chart(plot_df.set_index("step")["value"])
+                st.plotly_chart(plot_df.set_index("step")["value"])
         else:
             st.info("No metrics logged.")
 
@@ -85,7 +81,11 @@ def show_run_details(run_dir: Path):
                     elif file.suffix in [".txt", ".log", ".json"]:
                         st.text(file.read_text())
                     else:
-                        st.download_button(label=f"Download {file.name}", data=open(file, "rb"), file_name=file.name)
+                        st.download_button(
+                            label=f"Download {file.name}",
+                            data=open(file, "rb"),
+                            file_name=file.name,
+                        )
 
     with tab4:
         st.markdown("### Debug Info")
